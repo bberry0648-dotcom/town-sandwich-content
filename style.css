@@ -218,6 +218,12 @@ body.share textarea[readonly], body.share input[readonly] { background: transpar
 .svgwrap .ax { fill: var(--faint); font-size: 11px; font-family: var(--font); font-variant-numeric: tabular-nums; }
 .svgwrap .m-rc { fill: var(--s-rc); }
 .svgwrap .m-bl { fill: var(--s-bl); }
+.svgwrap .part { opacity: .55; }
+.svgwrap .ax.v { fill: var(--muted); font-weight: 700; }
+table.wkt td, table.wkt th { white-space: nowrap; }
+table.wkt td:first-child { white-space: normal; min-width: 150px; }
+ol.plain { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: 14px; }
+details.wk { border-top: 1px solid #eef1ec; padding-top: 8px; }
 .svgwrap .hit { fill: transparent; cursor: default; }
 .svgwrap .hit.on { fill: rgba(31, 58, 33, .06); }
 .tip { position: absolute; background: var(--ink); color: #fff; font-size: 12.5px; padding: 4px 9px; border-radius: 6px; pointer-events: none; white-space: nowrap; font-variant-numeric: tabular-nums; }

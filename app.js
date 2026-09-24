@@ -183,6 +183,44 @@ function dailyChart(an) {
     <div class="svgwrap"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="일별 게시 건수, 영수증 ${tr}건 블로그 ${tb}건">${g}</svg><div class="tip" hidden></div></div>
     <p class="small muted">분석에 쓴 관련 자료만 · 게시일 기준</p></div>`;
 }
+function weeklyPanel() {
+  const W = S.weekly; if (!W || !W.weeks.length) return "";
+  const weeks = [...W.weeks].reverse();  // 오래된 주 → 최근 주
+  const max = Math.max(1, ...weeks.map((w) => w.receipt + w.blog));
+  const step = max <= 10 ? 2 : max <= 30 ? 5 : max <= 60 ? 10 : 20, top = Math.ceil(max / step) * step;
+  const Wd = 640, H = 190, L = 28, B = 24, T = 8, cw = (Wd - L - 4) / weeks.length, bw = Math.min(46, cw - 10);
+  const y = (v) => T + (H - T - B) * (1 - v / top);
+  let g = "";
+  for (let t = 0; t <= top; t += step) g += `<line x1="${L}" x2="${Wd}" y1="${y(t)}" y2="${y(t)}" class="grid"/><text x="${L - 6}" y="${y(t) + 4}" class="ax" text-anchor="end">${t}</text>`;
+  weeks.forEach((w, i) => {
+    const x = L + 2 + i * cw + (cw - bw) / 2, base = H - B, hr = (H - T - B) * (w.receipt / top), hb = (H - T - B) * (w.blog / top);
+    if (w.receipt) g += `<rect x="${x}" y="${base - hr}" width="${bw}" height="${hr}" rx="3" class="m-rc${w.partial ? " part" : ""}"/>`;
+    if (w.blog) g += `<rect x="${x}" y="${base - hr - hb}" width="${bw}" height="${Math.max(0, hb - 2)}" rx="3" class="m-bl${w.partial ? " part" : ""}"/>`;
+    g += `<text x="${x + bw / 2}" y="${base - hr - hb - 5}" class="ax v" text-anchor="middle">${w.receipt + w.blog}</text>`;
+    g += `<text x="${x + bw / 2}" y="${H - 7}" class="ax" text-anchor="middle">${md(w.week)}주</text>`;
+    g += `<rect x="${L + 1 + i * cw}" y="${T}" width="${cw}" height="${H - T - B}" class="hit" data-tip="${md(w.week)}~${md(w.end)} · 영수증 ${w.receipt} · 블로그 ${w.blog}${w.partial ? " · 일부 기간" : ""}"/>`;
+  });
+  const asp = ["빵 식감", "재료", "맛", "양", "응대", "가격", "대기", "포장"];
+  const rows = W.weeks.map((w) => `<tr>
+    <td><b>${md(w.week)}~${md(w.end)}</b> ${w.partial ? chip(new Date(w.end) > new Date() ? "진행 중" : "일부 기간", "gray") : ""}${w.small ? chip("표본 적음", "warn") : ""}</td>
+    <td>${w.receipt}</td><td>${w.blog}</td><td>${w.disclosed}</td><td>${w.event}</td><td>${w.negative}</td>
+    ${asp.map((a) => `<td title="영수증 리뷰 ${w.n_text}건 중 ${w.aspects[a]}건">${w.n_text ? Math.round((w.aspects[a] / w.n_text) * 100) + "%" : "—"}</td>`).join("")}</tr>`).join("");
+  const ai = W.ai.map((a) => `<details class="wk"><summary><b>${md(a.week)}주 분석</b> <span class="small muted">${dt(a.created_at)} · 범위 ${esc(a.period.join(" ~ "))} · 불편 ${a.complaint_total}개</span></summary>
+    <div class="grid2" style="margin-top:8px">
+      <div class="stack"><div class="eyebrow">칭찬 TOP 3</div><ol class="plain">${a.praise.map((p) => `<li>${esc(p.point)} <span class="muted small num">${p.n}건</span></li>`).join("") || "<li class='muted'>없음</li>"}</ol>
+        <div class="eyebrow">추천 주제</div><ol class="plain">${a.topics.map((t) => `<li>${esc(t)}</li>`).join("")}</ol></div>
+      <div class="stack"><div class="eyebrow">불편 사항</div><ol class="plain">${a.complaints.map((p) => `<li>${esc(p.point)} <span class="muted small num">${p.n}건</span></li>`).join("") || "<li class='muted'>없음</li>"}</ol>
+        <div class="eyebrow">사용 완료한 초안</div>${a.used.length ? `<ol class="plain">${a.used.map((u) => `<li>${esc(u)}</li>`).join("")}</ol>` : `<p class="small muted">아직 없음</p>`}</div>
+    </div></details>`).join("");
+  return `<div class="panel" id="weekly"><div class="panel-head"><h2>주간 추이</h2><span class="small muted">${W.weeks.length}주 · ${md(W.start)}부터 쌓인 자료</span></div>
+    <p class="small muted">게시일 기준으로 주(월~일)마다 묶었어요. 숫자를 나란히 놓기만 하고 늘었다·줄었다고 판단하지 않아요. 영수증 리뷰가 10건 미만인 주는 '표본 적음'이에요.</p>
+    <div class="legend"><span><i class="sw rc"></i>영수증 리뷰</span><span><i class="sw bl"></i>블로그</span><span><i class="sw rc" style="opacity:.55"></i>흐린 막대 = 일부 기간(수집 시작 주·진행 중인 주)</span></div>
+    <div class="svgwrap"><svg viewBox="0 0 ${Wd} ${H}" role="img" aria-label="주별 게시 건수">${g}</svg><div class="tip" hidden></div></div>
+    <div class="tablewrap"><table class="cmp wkt"><tr><th>주</th><th>영수증</th><th>블로그</th><th>협찬 표기</th><th>이벤트 언급</th><th>불편 표현</th>${asp.map((a) => `<th>${a}</th>`).join("")}</tr>${rows}</table></div>
+    <p class="small muted">항목 % = 그 주 영수증 리뷰 중 해당 표현이 나온 비율 (관찰) · 불편 표현 = 단어 기준이라 오탐 포함</p>
+    <div class="stack"><div class="eyebrow">주별 AI 분석 기록 <span class="label-ai">AI 해석</span></div>${ai || `<p class="empty">아직 없어요.</p>`}</div>
+  </div>`;
+}
 function pairBars(title, rows, nR, nB, note) {
   if (!rows.length) return `<div class="panel chart"><h2>${title}</h2><p class="empty">자료가 없어요.</p></div>`;
   return `<div class="panel chart"><div class="panel-head"><h2>${title}</h2><span class="label-fact">관찰</span></div>${LEG}
@@ -259,6 +297,7 @@ function renderSummary() {
     <div class="span-7">${dailyChart(an)}</div>
     <div class="span-5">${pairBars("고객 반응 항목", merged(f, "aspects", 8), f.receipt.n, f.blog.n, "각 그룹에서 해당 표현이 나온 글의 비율 · 블로그는 글이 길어 대부분 높게 나와요")}</div>
   </div>
+  ${weeklyPanel()}
   <div class="dash-grid three">
     <div class="panel"><div class="panel-head"><h2>반복되는 칭찬</h2><span class="label-ai">AI 해석</span></div>${topList(ai, "praise", "없음")}</div>
     <div class="panel"><div class="panel-head"><h2>불편 사항</h2><span class="label-ai">AI 해석</span></div>${topList(ai, "complaints", "이 기간 자료에서는 찾지 못했어요")}</div>
@@ -655,6 +694,11 @@ function renderStore() {
     ${S.share ? `<p class="small">주소: <a href="${esc(S.share.url)}" target="_blank" rel="noopener">${esc(S.share.url)}</a> · 마지막 갱신 ${dt(S.share.published_at)}</p>` : ""}
     <p class="small muted">대시보드·수집 자료·초안을 읽기 전용으로 올려요. 매주 실행이 끝나면 자동으로 다시 올라가요. 초안을 고친 뒤 바로 반영하려면 아래 버튼을 누르세요. 영수증 리뷰 작성자 닉네임과 접속 키는 올리지 않고, 검색엔진 노출은 막아 둬요.</p>
     <div class="row"><button class="btn primary" id="publishShare">공유 사이트 지금 갱신</button>${S.share ? `<button class="btn sm" id="copyShare">주소 복사</button>` : ""}</div></div>
+  <div class="panel local-only"><div class="panel-head"><h2>백업</h2>${S.backup ? chip(S.backup.icloud ? "iCloud Drive" : "이 맥에만", S.backup.icloud ? "ok" : "warn") : chip("아직 없음", "gray")}</div>
+    ${S.backup ? `<p class="small">마지막 백업 ${dt(S.backup.at)} · 자료 ${S.backup.counts.items}건 · 분석 ${S.backup.counts.analyses}개 · 초안 ${S.backup.counts.drafts}개 · ${(S.backup.size / 1048576).toFixed(1)}MB</p>
+      <p class="small muted">위치: ${esc(S.backup.dir.replace(/^.*CloudDocs/, "iCloud Drive"))} · 최근 ${S.backup.kept}개 보관 (최대 26개)</p>` : ""}
+    <p class="small muted">실행이 끝날 때마다 자동으로 백업돼요(하루 1개). 복원하려면 앱을 끄고 백업 파일을 data/studio.db 로 바꿔 넣은 뒤 다시 켜세요.</p>
+    <div class="row"><button class="btn" id="runBackup">지금 백업</button></div></div>
   <div class="panel local-only"><div class="panel-head"><h2>수집 · 초안 설정</h2></div>
     <div class="form-grid">
       <div class="field"><label for="cQ">별도 검색어 (줄마다 1개)</label><textarea id="cQ" style="min-height:70px">${esc((s.search_queries || []).join("\n"))}</textarea></div>
@@ -711,6 +755,8 @@ function renderStore() {
     search_queries: document.getElementById("cQ").value.split("\n").map((x) => x.trim()).filter(Boolean),
     first_days: +val("cFirst") || 30, min_new_items: +val("cMin") || 0 });
   const cl = document.getElementById("copyLan"); if (cl) cl.onclick = () => copyText(S.access.lan);
+  const rb = document.getElementById("runBackup");
+  if (rb) rb.onclick = async () => { try { const r = await api("/api/backup", {}); S.backup = r.backup; toast("백업했어요"); renderStore(); } catch (e) { toast(e.message); } };
   const ps = document.getElementById("publishShare"); if (ps) ps.onclick = () => startJob("/api/share", {}, "공유 사이트에 올리는 중이에요");
   const cs = document.getElementById("copyShare"); if (cs) cs.onclick = () => copyText(S.share.url);
 }
