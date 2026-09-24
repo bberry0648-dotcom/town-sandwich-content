@@ -42,7 +42,7 @@ function toast(msg) {
   const t = document.createElement("div"); t.className = "toast"; t.textContent = msg; document.body.append(t);
   setTimeout(() => t.remove(), 2200);
 }
-async function copyText(text, btn) {
+async function copyText(text) {
   try { await navigator.clipboard.writeText(text); toast("복사했어요"); }
   catch {
     const ta = document.createElement("textarea"); ta.value = text; document.body.append(ta); ta.select();
@@ -225,7 +225,7 @@ function renderSummary() {
   let html = `
   <div class="dash-head">
     <div><h1>이번 주 대시보드</h1>
-      <p class="muted small">${an ? esc(an.basis) : "아직 분석 전이에요"}</p></div>
+      <p class="muted small">${an ? esc(an.basis) : "아직 분석 전이에요"} ${an && /뿐이라|미만이에요/.test(an.basis) ? chip("새 자료 적음", "warn") : ""}</p></div>
     <div class="row">${runChip}<span class="small muted">마지막 성공 수집 ${S.last_success_run ? dt(S.last_success_run) : "없음"}</span>${chip(sc.t, sc.cls)}</div>
   </div>
   <div id="jobBox"></div>`;
@@ -243,7 +243,7 @@ function renderSummary() {
   const su = storeUnconfirmed();
   html += `<div class="kpis">
     ${kpi("영수증 리뷰", f.receipt.n, run ? `이번 실행 새로 ${newR ?? 0}건` : "", "", "items")}
-    ${kpi("블로그 글", f.blog.n, `협찬 표기 ${ads.disclosed || 0} · 이벤트 언급 ${ads.event || 0}`, "", "items")}
+    ${kpi("블로그 글", f.blog.n, `${run ? `새로 ${newB}건 · ` : ""}협찬 표기 ${ads.disclosed || 0} · 이벤트 ${ads.event || 0}`, "", "items")}
     ${kpi("불편 사항", compl ?? "—", ai ? "AI가 근거와 함께 찾은 항목" : "AI 해석 없음", compl ? "warn" : "", "")}
     ${kpi("확인 필요 자료", pend, `잠실점 여부 ${f.pending_check} · 본문 없음 ${f.unread.length}`, pend ? "warn" : "", "items")}
     ${kpi("초안", drafts.length, `검토 전 ${ds[0]} · 수정 중 ${ds[1]} · 사용 완료 ${ds[2]}`, ds[0] ? "accent" : "ok", "drafts")}
