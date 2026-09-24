@@ -246,6 +246,11 @@ ol.rank li { display: grid; gap: 2px; counter-increment: rk; padding-left: 26px;
 ol.rank li::before { content: counter(rk); position: absolute; left: 0; top: 1px; width: 18px; height: 18px; border-radius: 50%; background: var(--green-soft); color: var(--green); font-size: 11px; font-weight: 800; display: grid; place-items: center; }
 .rk-main { display: flex; gap: 6px; align-items: baseline; }
 .rk-sub { display: flex; flex-wrap: wrap; gap: 2px 10px; align-items: baseline; }
+.btn.fix { margin-left: auto; font-size: 12px; color: var(--muted); padding: 2px 6px; }
+.btn.fix:hover { color: var(--bad); }
+details.removed { margin-top: 8px; font-size: 13px; }
+details.removed > summary { color: var(--muted); font-weight: 600; font-size: 12.5px; }
+ol.rank .quote { margin-top: 2px; }
 .src-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; transform: translateY(-1px); }
 .topics.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .dbar { display: flex; height: 26px; border-radius: 7px; overflow: hidden; gap: 2px; font-size: 12px; font-weight: 700; }

@@ -83,10 +83,11 @@ function linkify(text) {
   return esc(text).replace(/\b([RB]\d{1,3})\b/g, (m) => codes[m]
     ? `<a class="code" href="${esc(codes[m].url)}" target="_blank" rel="noopener" title="${esc(refLabel(codes[m]))}">${m}</a>` : m);
 }
-function aiPoints(list, emptyText) {
+function aiPoints(list, emptyText, g, key) {
   if (!list || !list.length) return `<p class="empty">${esc(emptyText)}</p>`;
-  return `<ul class="points">${list.map((p) => `<li><span>${linkify(p.point || p.issue || p.claim)}</span>
-    <span class="small muted">근거 ${p.refs.length}건 · ${refLinks(p.refs, 6)}</span></li>`).join("")}</ul>`;
+  return `<ul class="points">${list.map((p, idx) => `<li><span>${linkify(p.point || p.issue || p.claim)}</span>
+    ${itemFlags(p)}
+    <span class="small muted">근거 ${p.refs.length}건 · ${refLinks(p.refs, 6)}</span>${g && key ? fixBtn({ g, idx }, key) : ""}</li>`).join("")}</ul>`;
 }
 
 /* ---------------- 이번 주 요약 (대시보드) ---------------- */
@@ -137,9 +138,9 @@ function groupPanel(g, label, facts, ai) {
       <details><summary>질문·궁금 표현이 있는 문장 ${f.question_sentences.length}건</summary>${quoteList(f.question_sentences, 20)}</details>
     </div>
     ${a ? `<hr class="sep"><div class="stack"><div><span class="label-ai">AI 해석</span> <span class="small muted">근거 수 = 이 내용을 담은 글 수</span></div>
-      <div class="eyebrow">반복되는 칭찬 (${a.praise.length})</div>${aiPoints(a.praise, "없음")}
-      <div class="eyebrow">불편 사항 (${a.complaints.length})</div>${aiPoints(a.complaints, "이 자료에서는 찾지 못했어요")}
-      <div class="eyebrow">고객이 궁금해한 것 (${a.questions.length})</div>${aiPoints(a.questions, "없음")}
+      <div class="eyebrow">반복되는 칭찬 (${a.praise.length})</div>${aiPoints(a.praise, "없음", g, "praise")}
+      <div class="eyebrow">불편 사항 (${a.complaints.length})</div>${aiPoints(a.complaints, "이 자료에서는 찾지 못했어요", g, "complaints")}
+      <div class="eyebrow">고객이 궁금해한 것 (${a.questions.length})</div>${aiPoints(a.questions, "없음", g, "questions")}
       <div class="eyebrow">명시된 방문 목적</div>${aiPoints(a.purposes, "없음")}
       <div class="eyebrow">콘텐츠로 설명하면 좋을 것</div>${aiPoints(a.content_hints, "없음")}</div>` : ""}`}
   </div>`;
@@ -241,15 +242,35 @@ function merged(f, key, limit) {
   ["receipt", "blog"].forEach((g) => f[g][key].forEach((x) => { (m[x.term] = m[x.term] || { term: x.term, r: 0, b: 0 })[g === "receipt" ? "r" : "b"] = x.count; }));
   return Object.values(m).sort((a, b) => (b.r / (f.receipt.n || 1) + b.b / (f.blog.n || 1)) - (a.r / (f.receipt.n || 1) + a.b / (f.blog.n || 1))).slice(0, limit);
 }
+function itemFlags(p) {
+  return `${p.quote ? `<div class="quote">“${esc(p.quote)}”</div>` : ""}
+    ${p.source_mismatch ? `<div class="small" style="color:var(--warn)">근거 링크 확인 필요 — ${esc(p.source_mismatch)}</div>` : ""}
+    ${p.unclear ? `<div class="small" style="color:var(--warn)">판단 애매 — ${esc(p.unclear)}</div>` : ""}
+    ${p.fixed_source ? `<div class="small muted">${esc(p.fixed_source)}</div>` : ""}`;
+}
+function fixBtn(p, key) {
+  if (SHARE) return "";
+  const label = key === "complaints" ? "불만 아님" : key === "praise" ? "칭찬 아님" : "잘못 분류";
+  return `<button class="btn ghost sm fix" data-fix="${p.g}:${key}:${p.idx}" title="이 항목을 목록에서 빼고 기록을 남겨요">${label}</button>`;
+}
+function removedList(ai, key) {
+  const rm = (ai?._removed || []).map((r, i) => ({ ...r, i })).filter((r) => r.key === key);
+  if (!rm.length) return "";
+  return `<details class="removed"><summary>${key === "complaints" ? "불만이 아니라서 뺀" : "뺀"} 항목 ${rm.length}개</summary><ul class="points">${rm.map((r) => `<li>
+    <span>${esc(r.item.point)}</span><span class="small muted">${esc(r.by)} · ${esc(r.reason || "")}</span>
+    ${r.quote ? `<div class="quote">“${esc(r.quote)}”</div>` : ""}<span class="small">${refLinks(r.item.refs, 3)}</span>
+    ${SHARE ? "" : `<div><button class="btn ghost sm" data-restore="${r.i}">되돌리기</button></div>`}</li>`).join("")}</ul></details>`;
+}
 function topList(ai, key, empty) {
   const items = [];
-  ["receipt", "blog"].forEach((g) => (ai?.[g]?.[key] || []).forEach((p) => items.push({ ...p, g })));
+  ["receipt", "blog"].forEach((g) => (ai?.[g]?.[key] || []).forEach((p, idx) => items.push({ ...p, g, idx })));
   items.sort((a, b) => b.refs.length - a.refs.length);
-  if (!items.length) return `<p class="empty">${esc(empty)}</p>`;
+  if (!items.length) return `<p class="empty">${esc(empty)}</p>` + removedList(ai, key);
   const more = items.length > 10 ? `<p class="small muted">상위 10개만 보여요 (전체 ${items.length}개 · 상세 분석에서 모두 보기)</p>` : "";
   const few = items.length < 10 ? `<p class="small muted">근거가 있는 항목만 ${items.length}개 찾았어요</p>` : "";
   return more + few + `<ol class="rank">${items.slice(0, 10).map((p) => `<li><div class="rk-main"><span class="src-dot ${p.g === "receipt" ? "rc" : "bl"}" title="${p.g === "receipt" ? "영수증 리뷰" : "블로그"}"></span><span>${linkify(p.point)}</span></div>
-    <div class="rk-sub small muted"><b class="num">${p.refs.length}건</b><span>${p.g === "receipt" ? "영수증 리뷰" : "블로그"}</span>${refLinks(p.refs, 4)}</div></li>`).join("")}</ol>`;
+    ${key === "complaints" ? itemFlags(p) : ""}
+    <div class="rk-sub small muted"><b class="num">${p.refs.length}건</b><span>${p.g === "receipt" ? "영수증 리뷰" : "블로그"}</span>${refLinks(p.refs, 4)}${fixBtn(p, key)}</div></li>`).join("")}</ol>` + removedList(ai, key);
 }
 function storeUnconfirmed() {
   const st = S.store || {};
@@ -263,6 +284,11 @@ function kpi(label, value, sub, cls = "", go = "") {
   return go ? `<button class="kpi link ${cls}" data-go="${go}" type="button">${inner}</button>` : `<div class="kpi ${cls}">${inner}</div>`;
 }
 
+async function refreshAfterFix() {
+  S = await api("/api/state");
+  if (RANGE.key !== "latest") await loadRange(RANGE);
+  renderSummary();
+}
 async function loadRange(r) {
   RANGE = r;
   try { localStorage.setItem("cs_range", JSON.stringify(r)); } catch {}
@@ -396,6 +422,15 @@ function renderSummary() {
   renderJob();
   bindChartTips();
   bindRangeBar();
+  app.querySelectorAll("[data-fix]").forEach((b) => b.onclick = async () => {
+    const [g, key, idx] = b.dataset.fix.split(":");
+    try { await api(`/api/analysis/${an.id}/remove`, { group: g, key, index: +idx }); toast("목록에서 뺐어요 (아래 '뺀 항목'에서 되돌릴 수 있어요)"); await refreshAfterFix(); }
+    catch (e) { toast(e.message); }
+  });
+  app.querySelectorAll("[data-restore]").forEach((b) => b.onclick = async () => {
+    try { await api(`/api/analysis/${an.id}/restore`, { index: +b.dataset.restore }); toast("되돌렸어요"); await refreshAfterFix(); }
+    catch (e) { toast(e.message); }
+  });
   app.querySelectorAll("[data-topic]").forEach((b) => b.onclick = () => {
     const t = ai.topics[+b.dataset.topic];
     startJob("/api/generate", { analysis_id: an.id, blog_topic: `${t.title} — ${t.angle}`, only: "blog" }, "블로그 초안을 새로 만들어요. 기존 수정본은 그대로 둬요.");
