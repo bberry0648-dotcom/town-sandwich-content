@@ -21,6 +21,7 @@
   --font: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 html, body { margin: 0; }
 body {
   background: var(--bg); color: var(--ink); font-family: var(--font);
@@ -221,6 +222,13 @@ body.share textarea[readonly], body.share input[readonly] { background: transpar
 .svgwrap .part { opacity: .55; }
 .svgwrap .ax.v { fill: var(--muted); font-weight: 700; }
 table.wkt td, table.wkt th { white-space: nowrap; }
+table.wkt tr[data-range] { cursor: pointer; }
+table.wkt tr[data-range]:hover td { background: #f3f6f1; }
+table.wkt tr.on td { background: var(--green-soft); }
+.rangebar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 14px; }
+.range-select { border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; font-weight: 700; background: #fff; max-width: 100%; }
+.custom-range { display: inline-flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.custom-range input { border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; }
 table.wkt td:first-child { white-space: normal; min-width: 150px; }
 ol.plain { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: 14px; }
 details.wk { border-top: 1px solid #eef1ec; padding-top: 8px; }

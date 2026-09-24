@@ -11,6 +11,9 @@ const WD = ["일", "월", "화", "수", "목", "금", "토"];
 const STATUSES = ["검토 전", "수정 중", "사용 완료"];
 
 let S = null;              // /api/state
+let VIEW = null;           // 기간 보기(없으면 최근 정기 분석)
+let RANGE = { key: "latest" };
+try { const r = JSON.parse(localStorage.getItem("cs_range") || "null"); if (r && r.key) RANGE = r; } catch {}
 let ITEMS = null;          // /api/items 캐시
 let tab = "summary";
 let pollTimer = null;
@@ -76,7 +79,7 @@ function bars(list, n, limit = 10) {
       <span class="n">${n}건 중 ${x.count}</span></div></summary>${quoteList(x.refs)}</details>`).join("")}</div>`;
 }
 function linkify(text) {
-  const codes = S.analysis?.codes || {};
+  const codes = (VIEW || S.analysis)?.codes || {};
   return esc(text).replace(/\b([RB]\d{1,3})\b/g, (m) => codes[m]
     ? `<a class="code" href="${esc(codes[m].url)}" target="_blank" rel="noopener" title="${esc(refLabel(codes[m]))}">${m}</a>` : m);
 }
@@ -201,7 +204,7 @@ function weeklyPanel() {
     g += `<rect x="${L + 1 + i * cw}" y="${T}" width="${cw}" height="${H - T - B}" class="hit" data-tip="${md(w.week)}~${md(w.end)} · 영수증 ${w.receipt} · 블로그 ${w.blog}${w.partial ? " · 일부 기간" : ""}"/>`;
   });
   const asp = ["빵 식감", "재료", "맛", "양", "응대", "가격", "대기", "포장"];
-  const rows = W.weeks.map((w) => `<tr>
+  const rows = W.weeks.map((w) => `<tr data-range="w-${w.week}" class="${RANGE.key === `w-${w.week}` ? "on" : ""}" title="눌러서 이 주 보기">
     <td><b>${md(w.week)}~${md(w.end)}</b> ${w.partial ? chip(new Date(w.end) > new Date() ? "진행 중" : "일부 기간", "gray") : ""}${w.small ? chip("표본 적음", "warn") : ""}</td>
     <td>${w.receipt}</td><td>${w.blog}</td><td>${w.disclosed}</td><td>${w.event}</td><td>${w.negative}</td>
     ${asp.map((a) => `<td title="영수증 리뷰 ${w.n_text}건 중 ${w.aspects[a]}건">${w.n_text ? Math.round((w.aspects[a] / w.n_text) * 100) + "%" : "—"}</td>`).join("")}</tr>`).join("");
@@ -213,7 +216,7 @@ function weeklyPanel() {
         <div class="eyebrow">사용 완료한 초안</div>${a.used.length ? `<ol class="plain">${a.used.map((u) => `<li>${esc(u)}</li>`).join("")}</ol>` : `<p class="small muted">아직 없음</p>`}</div>
     </div></details>`).join("");
   return `<div class="panel" id="weekly"><div class="panel-head"><h2>주간 추이</h2><span class="small muted">${W.weeks.length}주 · ${md(W.start)}부터 쌓인 자료</span></div>
-    <p class="small muted">게시일 기준으로 주(월~일)마다 묶었어요. 숫자를 나란히 놓기만 하고 늘었다·줄었다고 판단하지 않아요. 영수증 리뷰가 10건 미만인 주는 '표본 적음'이에요.</p>
+    <p class="small muted">줄을 누르면 그 주만 볼 수 있어요. 게시일 기준으로 주(월~일)마다 묶었어요. 숫자를 나란히 놓기만 하고 늘었다·줄었다고 판단하지 않아요. 영수증 리뷰가 10건 미만인 주는 '표본 적음'이에요.</p>
     <div class="legend"><span><i class="sw rc"></i>영수증 리뷰</span><span><i class="sw bl"></i>블로그</span><span><i class="sw rc" style="opacity:.55"></i>흐린 막대 = 일부 기간(수집 시작 주·진행 중인 주)</span></div>
     <div class="svgwrap"><svg viewBox="0 0 ${Wd} ${H}" role="img" aria-label="주별 게시 건수">${g}</svg><div class="tip" hidden></div></div>
     <div class="tablewrap"><table class="cmp wkt"><tr><th>주</th><th>영수증</th><th>블로그</th><th>협찬 표기</th><th>이벤트 언급</th><th>불편 표현</th>${asp.map((a) => `<th>${a}</th>`).join("")}</tr>${rows}</table></div>
@@ -260,39 +263,96 @@ function kpi(label, value, sub, cls = "", go = "") {
   return go ? `<button class="kpi link ${cls}" data-go="${go}" type="button">${inner}</button>` : `<div class="kpi ${cls}">${inner}</div>`;
 }
 
+async function loadRange(r) {
+  RANGE = r;
+  try { localStorage.setItem("cs_range", JSON.stringify(r)); } catch {}
+  if (r.key === "latest") { VIEW = null; return; }
+  if (SHARE) { VIEW = SHARED.ranges?.[r.key] || null; if (!VIEW) RANGE = { key: "latest" }; return; }
+  try { VIEW = await api(`/api/range?from=${r.from}&to=${r.to}&type=${r.type || "span"}`); }
+  catch (e) { toast(e.message); VIEW = null; RANGE = { key: "latest" }; }
+}
+function rangeBar() {
+  const an = S.analysis; const opts = S.ranges || [];
+  const known = RANGE.key === "latest" || RANGE.key === "custom" || opts.some((o) => o.key === RANGE.key);
+  const sel = known ? RANGE.key : "latest";
+  const v = VIEW;
+  let note = "";
+  if (v) {
+    if (v.ai_status !== "ok") note = `<div class="note warn small">이 기간에 맞는 AI 분석이 없어요. 아래는 <b>관찰 수치만</b> 이 기간으로 다시 센 거예요 (칭찬·불편·추천 주제 없음).
+      ${SHARE ? "" : `<button class="btn sm" id="rangeAI">이 기간만 AI 분석하기 (5~8분, 초안은 안 바뀜)</button>`}</div>`;
+    else if (v.match === "week") note = `<div class="note small">관찰 수치는 이 주 게시분이고, <b>AI 해석(칭찬·불편·주제)은 이 주에 실행한 분석 결과</b>예요 (분석 범위 ${esc(v.ai_period.join(" ~ "))}).
+      ${SHARE ? "" : `<button class="btn sm" id="rangeAI">이 주 게시분만 AI 분석하기</button>`}</div>`;
+    else note = `<div class="note small">관찰 수치와 AI 해석 모두 이 기간(${esc(v.period_from)} ~ ${esc(v.period_to)}) 기준이에요.</div>`;
+  }
+  return `<div class="rangebar">
+    <label for="rangeSel" class="eyebrow">보는 범위</label>
+    <select id="rangeSel" class="range-select">
+      <option value="latest" ${sel === "latest" ? "selected" : ""}>최근 정기 분석${an ? ` (${md(an.period_from)}~${md(an.period_to)})` : ""}</option>
+      <optgroup label="주차별">${opts.filter((o) => o.type === "week").map((o) => `<option value="${o.key}" ${sel === o.key ? "selected" : ""}>${esc(o.label)}</option>`).join("")}</optgroup>
+      <optgroup label="기간">${opts.filter((o) => o.type !== "week").map((o) => `<option value="${o.key}" ${sel === o.key ? "selected" : ""}>${esc(o.label)}</option>`).join("")}
+        ${SHARE ? "" : `<option value="custom" ${sel === "custom" ? "selected" : ""}>직접 지정…</option>`}</optgroup>
+    </select>
+    <span class="custom-range" ${sel === "custom" && !SHARE ? "" : "hidden"}>
+      <input type="date" id="rFrom" value="${esc(RANGE.key === "custom" ? RANGE.from : "")}" aria-label="시작일"> ~
+      <input type="date" id="rTo" value="${esc(RANGE.key === "custom" ? RANGE.to : "")}" aria-label="종료일">
+      <button class="btn sm" id="rApply">보기</button></span>
+  </div>${note}`;
+}
+function bindRangeBar() {
+  const sel = document.getElementById("rangeSel"); if (!sel) return;
+  sel.disabled = false;
+  sel.onchange = async () => {
+    if (sel.value === "custom") { document.querySelector(".custom-range").hidden = false; return; }
+    const r = sel.value === "latest" ? { key: "latest" } : S.ranges.find((o) => o.key === sel.value);
+    await loadRange({ key: r.key, from: r.from, to: r.to, type: r.type }); renderSummary(); if (SHARE) lockDown();
+  };
+  const ap = document.getElementById("rApply");
+  if (ap) ap.onclick = async () => {
+    const f = val("rFrom"), t = val("rTo");
+    if (!f || !t || f > t) return toast("시작일과 종료일을 확인해 주세요");
+    await loadRange({ key: "custom", from: f, to: t, type: "span" }); renderSummary();
+  };
+  const ai = document.getElementById("rangeAI");
+  if (ai) ai.onclick = () => startJob("/api/analyze_range", { from: VIEW.period_from, to: VIEW.period_to }, "이 기간만 AI 분석을 시작했어요 (5~8분)");
+  app.querySelectorAll("tr[data-range]").forEach((tr) => tr.onclick = async () => {
+    const r = S.ranges.find((o) => o.key === tr.dataset.range); if (!r) return;
+    await loadRange({ key: r.key, from: r.from, to: r.to, type: r.type }); renderSummary(); if (SHARE) lockDown(); window.scrollTo(0, 0);
+  });
+}
 function renderSummary() {
-  const an = S.analysis; const run = S.runs[0]; const sc = scheduleText();
+  const an = VIEW || S.analysis; const run = S.runs[0]; const sc = scheduleText();
   const ai = an && an.ai_status === "ok" ? an.ai : null;
   const drafts = S.drafts.filter((d) => !d.superseded);
   const runChip = run ? chip(...(RUN[run.status] || [run.status, "gray"])) : chip("실행 기록 없음", "gray");
   let html = `
   <div class="dash-head">
-    <div><h1>이번 주 대시보드</h1>
+    <div><h1>${VIEW ? esc((S.ranges || []).find((o) => o.key === RANGE.key)?.label || `${md(VIEW.period_from)} ~ ${md(VIEW.period_to)}`) : "이번 주 대시보드"}</h1>
       <p class="muted small">${an ? esc(an.basis) : "아직 분석 전이에요"} ${an && /뿐이라|미만이에요/.test(an.basis) ? chip("새 자료 적음", "warn") : ""}</p></div>
     <div class="row">${runChip}<span class="small muted">마지막 성공 수집 ${S.last_success_run ? dt(S.last_success_run) : "없음"}</span>${chip(sc.t, sc.cls)}</div>
   </div>
-  <div id="jobBox"></div>`;
+  <div id="jobBox"></div>
+  ${S.analysis ? rangeBar() : ""}`;
   if (!an) {
     html += `<div class="panel"><h2>아직 분석한 자료가 없어요</h2>
       <p><b>지금 조회하고 초안 만들기</b>를 누르면 최근 ${S.settings.first_days}일 영수증 리뷰와 블로그 글을 모아 분석하고 초안을 만들어요. 보통 10~15분 걸려요.</p></div>`;
     app.innerHTML = `<section class="view">${html}</section>`; renderJob(); return;
   }
   const f = an.facts;
-  const newR = run?.stats?.sources?.place_receipt?.new, newB = (run?.stats?.sources?.place_blog?.new || 0) + (run?.stats?.sources?.search_blog?.new || 0);
+  const newR = VIEW ? null : run?.stats?.sources?.place_receipt?.new, newB = (run?.stats?.sources?.place_blog?.new || 0) + (run?.stats?.sources?.search_blog?.new || 0);
   const ads = f.blog_ads || {};
   const compl = ai ? ["receipt", "blog"].reduce((s, g) => s + ai[g].complaints.length, 0) : null;
   const pend = f.pending_check + f.unread.length;
   const ds = STATUSES.map((s) => drafts.filter((d) => d.status === s).length);
   const su = storeUnconfirmed();
   html += `<div class="kpis">
-    ${kpi("영수증 리뷰", f.receipt.n, run ? `이번 실행 새로 ${newR ?? 0}건` : "", "", "items")}
-    ${kpi("블로그 글", f.blog.n, `${run ? `새로 ${newB}건 · ` : ""}협찬 표기 ${ads.disclosed || 0} · 이벤트 ${ads.event || 0}`, "", "items")}
+    ${kpi("영수증 리뷰", f.receipt.n, VIEW ? "이 기간 게시" : run ? `이번 실행 새로 ${newR ?? 0}건` : "", "", "items")}
+    ${kpi("블로그 글", f.blog.n, `${run && !VIEW ? `새로 ${newB}건 · ` : ""}협찬 표기 ${ads.disclosed || 0} · 이벤트 ${ads.event || 0}`, "", "items")}
     ${kpi("불편 사항", compl ?? "—", ai ? "AI가 근거와 함께 찾은 항목" : "AI 해석 없음", compl ? "warn" : "", "")}
     ${kpi("확인 필요 자료", pend, `잠실점 여부 ${f.pending_check} · 본문 없음 ${f.unread.length}`, pend ? "warn" : "", "items")}
     ${kpi("초안", drafts.length, `검토 전 ${ds[0]} · 수정 중 ${ds[1]} · 사용 완료 ${ds[2]}`, ds[0] ? "accent" : "ok", "drafts")}
     ${kpi("매장 정보 확인", su.total ? `${su.total}개 남음` : "완료", su.total ? `가격 ${su.m} · 혜택 ${su.d} · 옵션 ${su.o} 후기 기준` : "모두 공식·확인", su.total ? "warn" : "ok", "store")}
   </div>
-  ${an.ai_status !== "ok" ? `<div class="note bad small">AI 해석 실패: ${esc(an.ai_error || an.ai_status)}. 아래는 단어 기준 관찰만이에요. <button class="btn sm" id="reanalyze">분석 다시 하기</button></div>` : ""}
+  ${an.ai_status !== "ok" && !VIEW ? `<div class="note bad small">AI 해석 실패: ${esc(an.ai_error || an.ai_status)}. 아래는 단어 기준 관찰만이에요. <button class="btn sm" id="reanalyze">분석 다시 하기</button></div>` : ""}
   <div class="dash-grid">
     <div class="span-7">${dailyChart(an)}</div>
     <div class="span-5">${pairBars("고객 반응 항목", merged(f, "aspects", 8), f.receipt.n, f.blog.n, "각 그룹에서 해당 표현이 나온 글의 비율 · 블로그는 글이 길어 대부분 높게 나와요")}</div>
@@ -312,7 +372,7 @@ function renderSummary() {
         <div><button class="btn sm" data-topic="${i}">이 주제로 블로그 초안</button></div></div>`).join("")}</div>` : `<p class="empty">AI 해석이 있어야 주제를 추천해요.</p>`}
     </div>
     <div class="span-5 stack" style="gap:20px;align-content:start">
-      <div class="panel"><div class="panel-head"><h2>생성된 초안</h2><button class="btn ghost sm" data-go="drafts">열기</button></div>
+      <div class="panel"><div class="panel-head"><h2>${VIEW ? "현재 초안" : "생성된 초안"}</h2><button class="btn ghost sm" data-go="drafts">열기</button></div>
         <div class="dbar" aria-label="초안 상태">${STATUSES.map((s, i) => ds[i] ? `<span class="seg s${i}" style="flex:${ds[i]}">${s} ${ds[i]}</span>` : "").join("")}</div>
         ${drafts.length ? `<div class="stack">${drafts.map((d) => `<div class="drow"><select class="status-select" data-s="${esc(d.status)}" data-status-id="${d.id}" aria-label="상태">${STATUSES.map((s) => `<option ${s === d.status ? "selected" : ""}>${s}</option>`).join("")}</select>
           <span class="dname">${d.kind === "blog" ? "블로그" : `스레드 ${d.slot}`} · ${esc(d.meta.topic)}</span>${d.warnings?.length ? chip(`점검 ${d.warnings.length}`, "warn") : ""}</div>`).join("")}</div>` : `<p class="empty">아직 초안이 없어요.</p>`}
@@ -330,11 +390,12 @@ function renderSummary() {
     </ul>
   </div>
   <details class="panel"><summary>영수증 리뷰 · 블로그 상세 분석</summary><div class="grid2" style="margin-top:12px">${groupPanel("receipt", "영수증 리뷰", f, ai)}${groupPanel("blog", "블로그 글", f, ai)}</div></details>
-  <details class="panel"><summary>지난 분석과 비교</summary>${compareTable(f.compare)}</details>
+  ${VIEW ? "" : `<details class="panel"><summary>지난 분석과 비교</summary>${compareTable(f.compare)}</details>`}
   ${run ? `<details class="panel"><summary>최근 실행의 출처별 결과 (${esc(run.window_from || "")} ~ ${esc(run.window_to || "")})</summary>${sourceRows(run)}</details>` : ""}`;
   app.innerHTML = `<section class="view">${html}</section>`;
   renderJob();
   bindChartTips();
+  bindRangeBar();
   app.querySelectorAll("[data-topic]").forEach((b) => b.onclick = () => {
     const t = ai.topics[+b.dataset.topic];
     startJob("/api/generate", { analysis_id: an.id, blog_topic: `${t.title} — ${t.angle}`, only: "blog" }, "블로그 초안을 새로 만들어요. 기존 수정본은 그대로 둬요.");
@@ -389,6 +450,11 @@ function poll() {
     if (st.job.running) { S.job = st.job; renderJob(); return poll(); }
     await flushSaves();
     S = st; ITEMS = null;
+    if (RANGE.key !== "latest") {
+      const r = RANGE.key.startsWith("w-") || RANGE.key === "custom" ? RANGE
+        : (S.ranges.find((o) => o.key === RANGE.key) || { key: "latest" });
+      await loadRange(r.key === "latest" ? { key: "latest" } : { key: r.key, from: r.from, to: r.to, type: r.type });
+    }
     if (was) toast(st.job.error ? "실행이 끝났지만 오류가 있어요" : "완료했어요");
     render();
   }, 2000);
@@ -770,7 +836,7 @@ function render() {
 }
 function lockDown() {
   app.querySelectorAll("textarea, input").forEach((e) => { e.readOnly = true; if (e.type === "file") e.disabled = true; });
-  app.querySelectorAll("select").forEach((e) => { if (!e.closest(".filters")) e.disabled = true; });
+  app.querySelectorAll("select").forEach((e) => { if (!e.closest(".filters") && e.id !== "rangeSel") e.disabled = true; });
   app.querySelectorAll(".filters input").forEach((e) => { e.readOnly = false; });
   app.querySelectorAll("button, label.btn").forEach((b) => {
     if (!b.matches("[data-go], [data-copy-body], [data-copy-title], [data-copy-old], .kpi")) b.hidden = true;
@@ -793,6 +859,10 @@ app.addEventListener("click", (e) => { const g = e.target.closest("[data-go]"); 
   const h = location.hash.slice(1); if (["summary", "items", "drafts", "store"].includes(h)) tab = h;
   try { S = await api("/api/state"); }
   catch (e) { app.innerHTML = `<div class="panel"><h2>연결할 수 없어요</h2><p>${esc(e.message)}</p><p class="small muted">맥에서 서버가 켜져 있는지 확인해 주세요.</p></div>`; return; }
+  if (RANGE.key !== "latest") {
+    const r = RANGE.key === "custom" ? RANGE : (S.ranges || []).find((o) => o.key === RANGE.key);
+    await loadRange(r && !(SHARE && RANGE.key === "custom") ? { key: r.key, from: r.from, to: r.to, type: r.type } : { key: "latest" });
+  }
   if (SHARE) document.querySelector(".brand span").textContent = `읽기 전용 공유본 · ${dt(SHARED.built_at)} 기준`;
   render();
   if (S.job.running && !SHARE) poll();
