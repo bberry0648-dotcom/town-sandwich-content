@@ -173,7 +173,7 @@ function dailyChart(an) {
     if (v.r) g += `<rect x="${x}" y="${base - hr}" width="${bw}" height="${hr}" rx="2" class="m-rc"/>`;
     if (v.b) g += `<rect x="${x}" y="${base - hr - hb}" width="${bw}" height="${Math.max(0, hb - (v.r ? 1.5 : 0))}" rx="2" class="m-bl"/>`;
     if (i % 7 === 0 || i === vals.length - 1) g += `<text x="${x + bw / 2}" y="${H - 6}" class="ax" text-anchor="middle">${md(v.d)}</text>`;
-    g += `<rect x="${x - 1}" y="${T}" width="${cw}" height="${H - T - B}" class="hit" data-tip="${md(v.d)} · 영수증 ${v.r} · 블로그 ${v.b}"/>`;
+    g += `<rect x="${L + 1 + i * cw}" y="${T}" width="${cw}" height="${H - T - B}" class="hit" data-tip="${md(v.d)} · 영수증 ${v.r} · 블로그 ${v.b}"/>`;
   });
   const tr = vals.reduce((s, v) => s + v.r, 0), tb = vals.reduce((s, v) => s + v.b, 0);
   return `<div class="panel chart"><div class="panel-head"><h2>일별 게시 건수</h2><span class="small muted num">영수증 ${tr} · 블로그 ${tb}</span></div>${LEG}
