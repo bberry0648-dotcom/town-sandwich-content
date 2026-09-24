@@ -133,7 +133,10 @@ function groupPanel(g, label, facts, ai) {
       <details><summary>불편·부정 표현이 있는 문장 ${f.negative_sentences.length}건 (단어 기준이라 오탐 포함)</summary>${quoteList(f.negative_sentences, 20)}</details>
       <details><summary>질문·궁금 표현이 있는 문장 ${f.question_sentences.length}건</summary>${quoteList(f.question_sentences, 20)}</details>
     </div>
-    ${a ? `<hr class="sep"><div class="stack"><div><span class="label-ai">AI 해석</span></div>
+    ${a ? `<hr class="sep"><div class="stack"><div><span class="label-ai">AI 해석</span> <span class="small muted">근거 수 = 이 내용을 담은 글 수</span></div>
+      <div class="eyebrow">반복되는 칭찬 (${a.praise.length})</div>${aiPoints(a.praise, "없음")}
+      <div class="eyebrow">불편 사항 (${a.complaints.length})</div>${aiPoints(a.complaints, "이 자료에서는 찾지 못했어요")}
+      <div class="eyebrow">고객이 궁금해한 것 (${a.questions.length})</div>${aiPoints(a.questions, "없음")}
       <div class="eyebrow">명시된 방문 목적</div>${aiPoints(a.purposes, "없음")}
       <div class="eyebrow">콘텐츠로 설명하면 좋을 것</div>${aiPoints(a.content_hints, "없음")}</div>` : ""}`}
   </div>`;
@@ -202,7 +205,9 @@ function topList(ai, key, empty) {
   ["receipt", "blog"].forEach((g) => (ai?.[g]?.[key] || []).forEach((p) => items.push({ ...p, g })));
   items.sort((a, b) => b.refs.length - a.refs.length);
   if (!items.length) return `<p class="empty">${esc(empty)}</p>`;
-  return `<ol class="rank">${items.slice(0, 6).map((p) => `<li><div class="rk-main"><span class="src-dot ${p.g === "receipt" ? "rc" : "bl"}" title="${p.g === "receipt" ? "영수증 리뷰" : "블로그"}"></span><span>${linkify(p.point)}</span></div>
+  const more = items.length > 10 ? `<p class="small muted">상위 10개만 보여요 (전체 ${items.length}개 · 상세 분석에서 모두 보기)</p>` : "";
+  const few = items.length < 10 ? `<p class="small muted">근거가 있는 항목만 ${items.length}개 찾았어요</p>` : "";
+  return more + few + `<ol class="rank">${items.slice(0, 10).map((p) => `<li><div class="rk-main"><span class="src-dot ${p.g === "receipt" ? "rc" : "bl"}" title="${p.g === "receipt" ? "영수증 리뷰" : "블로그"}"></span><span>${linkify(p.point)}</span></div>
     <div class="rk-sub small muted"><b class="num">${p.refs.length}건</b><span>${p.g === "receipt" ? "영수증 리뷰" : "블로그"}</span>${refLinks(p.refs, 4)}</div></li>`).join("")}</ol>`;
 }
 function storeUnconfirmed() {
