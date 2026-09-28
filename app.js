@@ -785,6 +785,7 @@ function renderStore() {
     </div>
     <div class="row"><button class="btn primary" id="applySched">예약 적용</button><span class="small muted">이 맥의 launchd에 등록하고, 실제로 등록됐는지 확인해서 위 상태에 보여 줘요</span></div>
     <div class="note small"><b>어떻게 실행되나요?</b><br>
+      · 예약 실행은 <b>지난주 월~일</b>에 게시된 글만 분석해요(월요일 9/28 실행 → 9/21~9/27). 버튼으로 직접 실행하면 지난 실행 이후 새로 올라온 글을 봐요.<br>
       · 수집·분석은 <b>이 맥북에서</b> 돌아가요. 예약 시각에 맥이 <b>켜져 있고 로그인된 상태</b>여야 해요. 잠자기 중이면 깨어난 뒤 실행되고, 전원이 꺼져 있었다면 그 주는 건너뛰어요('지난 예약 실행 없음'으로 표시).<br>
       · Chrome이나 브라우저 연결, 네이버 로그인은 필요 없어요(로그인 없이 보이는 공개 페이지만 읽어요).<br>
       · AI 분석·초안은 이 맥에 로그인된 <b>Claude Code(claude.ai Pro 구독)</b>로 돌아가요. 따로 API 요금은 없고 Pro 사용량에서 차감돼요.<br>
