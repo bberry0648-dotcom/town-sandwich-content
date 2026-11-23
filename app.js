@@ -497,14 +497,27 @@ function poll() {
 document.getElementById("runBtn").onclick = () => startJob("/api/run", {}, "조회를 시작했어요. 보통 10~15분 걸려요");
 
 /* ---------------- 수집 자료 ---------------- */
-const filt = { kind: "", src: "", rel: "", ad: "", q: "" };
+const filt = { kind: "", src: "", rel: "", ad: "", week: "", q: "" };
+/* 블로그 본문의 해시태그 = 글쓴이가 고른 검색 키워드. 숫자뿐인 것(&#034; 찌꺼기)·한글/영문 없는 것·'협찬' 표기는 뺀다 */
+function tagsOf(it) {
+  if (it.kind !== "blog" || !it.body) return [];
+  const out = new Set();
+  for (const m of it.body.matchAll(/#([가-힣A-Za-z0-9_]{2,30})/g))
+    if (/[가-힣]|[A-Za-z]{3}/.test(m[1]) && m[1] !== "협찬") out.add(m[1]);
+  return [...out];
+}
 async function renderItems() {
   if (!ITEMS) { app.innerHTML = `<p class="empty">자료를 불러오는 중…</p>`; ITEMS = await api("/api/items"); }
-  const rows = ITEMS.filter((it) => (!filt.kind || it.kind === filt.kind) && (!filt.src || it.sources.split(",").includes(filt.src))
+  const weeks = (S?.ranges || []).filter((o) => o.type === "week");
+  const wk = weeks.find((o) => o.key === filt.week);
+  const rows = ITEMS.filter((it) => (!wk || (it.published_at >= wk.from && it.published_at <= wk.to)) && (!filt.kind || it.kind === filt.kind) && (!filt.src || it.sources.split(",").includes(filt.src))
     && (!filt.rel || (filt.rel === "unread" ? it.body_status === "snippet_only" : it.relevance_effective === filt.rel))
     && (!filt.ad || (it.kind === "blog" && it.ad_flag === filt.ad))
     && (!filt.q || `${it.title || ""} ${it.body || ""} ${it.snippet || ""}`.includes(filt.q)));
   const cnt = (f) => ITEMS.filter(f).length;
+  const tagCnt = {}; const tagged = rows.filter((it) => it.kind === "blog");
+  tagged.forEach((it) => tagsOf(it).forEach((t) => { tagCnt[t] = (tagCnt[t] || 0) + 1; }));
+  const topTags = Object.entries(tagCnt).sort((a, b) => b[1] - a[1]).slice(0, 20);
   const sel = (id, opts, v) => `<select id="${id}">${opts.map(([k, t]) => `<option value="${k}" ${k === v ? "selected" : ""}>${esc(t)}</option>`).join("")}</select>`;
   app.innerHTML = `<section class="view">
   <div class="panel"><div class="panel-head"><h1>수집한 리뷰·블로그 자료</h1><span class="muted small num">전체 ${ITEMS.length}건</span></div>
@@ -513,6 +526,7 @@ async function renderItems() {
       ${chip(`본문 미확인 ${cnt((i) => i.body_status === "snippet_only")}`, "gray")}${chip(`협찬 블로그 ${cnt((i) => i.kind === "blog" && i.ad_flag === "disclosed")}`, "bad")}${chip(`협찬 아닌 블로그 ${cnt((i) => i.kind === "blog" && i.ad_flag === "none_found")}`, "ok")}</div>
     <p class="small muted">게시일은 네이버에 표시된 작성일(블로그는 글의 발행 시각), 수집일은 이 앱이 처음 가져온 날이에요. 같은 글은 한 번만 저장하고 출처를 합쳐 표시해요.</p>
     <div class="filters">
+      ${sel("fWeek", [["", "주차 전체"], ...weeks.map((o) => [o.key, o.label])], filt.week)}
       ${sel("fKind", [["", "종류 전체"], ["receipt", "영수증 리뷰"], ["blog", "블로그"]], filt.kind)}
       ${sel("fSrc", [["", "출처 전체"], ["place_receipt", "영수증 리뷰"], ["place_blog", "플레이스 연결 블로그"], ["search_blog", "별도 검색 블로그"], ["manual", "직접 입력"]], filt.src)}
       ${sel("fRel", [["", "관련성 전체"], ["related", "관련"], ["check", "확인 필요"], ["excluded", "제외"], ["unread", "본문 미확인"]], filt.rel)}
@@ -521,6 +535,9 @@ async function renderItems() {
     </div>
     <div class="row local-only"><span class="small muted">관련성을 바꾼 뒤에는</span><button class="btn sm" id="reanalyze2">분석·초안 다시 하기</button><span class="small muted">(수정한 초안은 그대로 둬요)</span></div>
   </div>
+  <div class="panel"><div class="panel-head"><h2>블로그가 많이 쓴 키워드</h2><span class="muted small num">${wk ? esc(wk.label) + " · " : ""}블로그 ${tagged.length}건의 해시태그</span></div>
+    <div class="row small">${topTags.map(([t, n]) => chip(`#${t} ${n}`, "gray")).join("") || `<span class="muted">해시태그가 있는 블로그가 없어요.</span>`}</div>
+    <p class="small muted">숫자는 그 태그를 쓴 글 수예요. 지금 고른 필터(주차·협찬 여부 등)에 맞는 블로그만 세요.</p></div>
   <div class="panel"><div class="panel-head"><h2>목록</h2><span class="muted small num">${rows.length}건</span></div>
     <div>${rows.slice(0, 300).map(itemRow).join("") || `<p class="empty">조건에 맞는 자료가 없어요.</p>`}</div>
     ${rows.length > 300 ? `<p class="small muted">앞 300건만 보여요. 필터로 좁혀 주세요.</p>` : ""}
@@ -528,7 +545,7 @@ async function renderItems() {
   ${manualPanel()}
   </section>`;
   const bind = (id, k) => { const el = document.getElementById(id); el.oninput = el.onchange = () => { filt[k] = el.value; renderItems(); if (k === "q") { const q = document.getElementById("fQ"); q.focus(); q.setSelectionRange(q.value.length, q.value.length); } }; };
-  bind("fKind", "kind"); bind("fSrc", "src"); bind("fRel", "rel"); bind("fAd", "ad"); bind("fQ", "q");
+  bind("fKind", "kind"); bind("fSrc", "src"); bind("fRel", "rel"); bind("fAd", "ad"); bind("fWeek", "week"); bind("fQ", "q");
   document.getElementById("reanalyze2").onclick = () => startJob("/api/reanalyze", {}, "분석을 다시 해요");
   app.querySelectorAll(".item .body").forEach((b) => b.onclick = () => b.parentElement.classList.toggle("open"));
   app.querySelectorAll("[data-rel]").forEach((b) => b.onclick = async () => {
@@ -553,7 +570,7 @@ function itemRow(it) {
       ${it.rating ? `<span>별점 ${it.rating}</span>` : ""}${it.visit_count > 1 ? `<span>${it.visit_count}번째 방문</span>` : ""}</div>
     ${it.title ? `<div class="title">${it.url ? `<a href="${esc(it.url)}" target="_blank" rel="noopener">${esc(it.title)}</a>` : esc(it.title)}</div>` : ""}
     <div class="body">${esc(it.body || it.snippet || "(내용 없음)")}</div>
-    <div class="small muted">판정 근거: ${esc(it.relevance_reason || "")}${it.ad_evidence ? ` · 표기 문구: “${esc(it.ad_evidence)}”` : ""}</div>
+    ${it.kind === "blog" ? `<div class="small muted">키워드: ${tagsOf(it).map((t) => "#" + esc(t)).join(" ") || "해시태그 없음"}</div>` : ""}
     <div class="row">${!it.title && it.url ? `<a class="small" href="${esc(it.url)}" target="_blank" rel="noopener">원문 보기</a>` : ""}
       <button class="btn sm" data-rel="related">관련 있음</button><button class="btn sm" data-rel="excluded">제외</button>
       ${it.relevance_user ? `<button class="btn ghost sm" data-rel="">자동 판정으로</button>` : ""}</div>
