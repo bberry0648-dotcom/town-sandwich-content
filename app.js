@@ -4,8 +4,8 @@
 const SRC = { place_receipt: "영수증 리뷰", place_blog: "플레이스 연결 블로그", search_blog: "별도 검색 블로그", manual: "직접 입력" };
 const REL = { related: "관련", check: "확인 필요", excluded: "제외" };
 const REL_CLS = { related: "ok", check: "warn", excluded: "gray" };
-const AD = { disclosed: ["광고·협찬 표기 있음", "bad"], event: ["매장 리뷰 이벤트 언급", "warn"], self_claim: ["'내돈내산' 표기 (작성자 주장)", "ok"],
-             none_found: ["광고 표기 확인 안 됨 (자발적 후기로 단정 안 함)", "gray"], unknown: ["광고 표기 판단 불가", "gray"] };
+const AD = { disclosed: ["협찬 (슈퍼멤버스)", "bad"], event: ["매장 리뷰 이벤트 언급", "warn"],
+             none_found: ["협찬 아님", "ok"], unknown: ["협찬 여부 판단 불가 (본문 못 읽음)", "gray"] };
 const RUN = { success: ["수집 성공", "ok"], partial: ["일부만 성공", "warn"], failed: ["수집 실패", "bad"], running: ["실행 중", "gray"] };
 const WD = ["일", "월", "화", "수", "목", "금", "토"];
 const STATUSES = ["검토 전", "수정 중", "사용 완료"];
@@ -372,7 +372,7 @@ function renderSummary() {
   const su = storeUnconfirmed();
   html += `<div class="kpis">
     ${kpi("영수증 리뷰", f.receipt.n, VIEW ? "이 기간 게시" : run ? `이번 실행 새로 ${newR ?? 0}건` : "", "", "items")}
-    ${kpi("블로그 글", f.blog.n, `${run && !VIEW ? `새로 ${newB}건 · ` : ""}협찬 표기 ${ads.disclosed || 0} · 이벤트 ${ads.event || 0} · 내돈내산 ${ads.self_claim || 0}`, "", "items")}
+    ${kpi("블로그 글", f.blog.n, `${run && !VIEW ? `새로 ${newB}건 · ` : ""}협찬 ${ads.disclosed || 0} · 협찬 아님 ${ads.none_found || 0}`, "", "items")}
     ${kpi("불편 사항", compl ?? "—", ai ? "AI가 근거와 함께 찾은 항목" : "AI 해석 없음", compl ? "warn" : "", "")}
     ${kpi("확인 필요 자료", pend, `잠실점 여부 ${f.pending_check} · 본문 없음 ${f.unread.length}`, pend ? "warn" : "", "items")}
     ${kpi("초안", drafts.length, `검토 전 ${ds[0]} · 수정 중 ${ds[1]} · 사용 완료 ${ds[2]}`, ds[0] ? "accent" : "ok", "drafts")}
@@ -510,13 +510,13 @@ async function renderItems() {
   <div class="panel"><div class="panel-head"><h1>수집한 리뷰·블로그 자료</h1><span class="muted small num">전체 ${ITEMS.length}건</span></div>
     <div class="row small">${chip(`영수증 ${cnt((i) => i.kind === "receipt")}`)}${chip(`블로그 ${cnt((i) => i.kind === "blog")}`)}
       ${chip(`확인 필요 ${cnt((i) => i.relevance_effective === "check")}`, "warn")}${chip(`제외 ${cnt((i) => i.relevance_effective === "excluded")}`, "gray")}
-      ${chip(`본문 미확인 ${cnt((i) => i.body_status === "snippet_only")}`, "gray")}${chip(`내돈내산 블로그 ${cnt((i) => i.kind === "blog" && i.ad_flag === "self_claim")}`, "ok")}</div>
+      ${chip(`본문 미확인 ${cnt((i) => i.body_status === "snippet_only")}`, "gray")}${chip(`협찬 블로그 ${cnt((i) => i.kind === "blog" && i.ad_flag === "disclosed")}`, "bad")}${chip(`협찬 아닌 블로그 ${cnt((i) => i.kind === "blog" && i.ad_flag === "none_found")}`, "ok")}</div>
     <p class="small muted">게시일은 네이버에 표시된 작성일(블로그는 글의 발행 시각), 수집일은 이 앱이 처음 가져온 날이에요. 같은 글은 한 번만 저장하고 출처를 합쳐 표시해요.</p>
     <div class="filters">
       ${sel("fKind", [["", "종류 전체"], ["receipt", "영수증 리뷰"], ["blog", "블로그"]], filt.kind)}
       ${sel("fSrc", [["", "출처 전체"], ["place_receipt", "영수증 리뷰"], ["place_blog", "플레이스 연결 블로그"], ["search_blog", "별도 검색 블로그"], ["manual", "직접 입력"]], filt.src)}
       ${sel("fRel", [["", "관련성 전체"], ["related", "관련"], ["check", "확인 필요"], ["excluded", "제외"], ["unread", "본문 미확인"]], filt.rel)}
-      ${sel("fAd", [["", "광고 표기 전체"], ["self_claim", "내돈내산 표기"], ["disclosed", "광고·협찬 표기"], ["event", "리뷰 이벤트 언급"], ["none_found", "표기 없음"]], filt.ad)}
+      ${sel("fAd", [["", "협찬 여부 전체"], ["disclosed", "협찬 (슈퍼멤버스)"], ["none_found", "협찬 아님"]], filt.ad)}
       <input class="inline" id="fQ" placeholder="본문 검색" value="${esc(filt.q)}">
     </div>
     <div class="row local-only"><span class="small muted">관련성을 바꾼 뒤에는</span><button class="btn sm" id="reanalyze2">분석·초안 다시 하기</button><span class="small muted">(수정한 초안은 그대로 둬요)</span></div>
